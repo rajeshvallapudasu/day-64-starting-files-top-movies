@@ -38,7 +38,8 @@ class Movie(db.Model):
     review=db.Column(db.String,nullable=False)
     img_url=db.Column(db.String,nullable=False)
 
-
+with app.app_context():
+    db.create_all()
 
 
 Bootstrap5(app)
