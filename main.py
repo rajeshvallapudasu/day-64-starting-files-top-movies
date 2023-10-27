@@ -54,7 +54,7 @@ class AddMovie(FlaskForm):
 
 @app.route("/")
 def home():
-    all_movies = Movie.query.order_by(Movie.rating).all()
+    all_movies = []
 
     for i in range(len(all_movies)):
         all_movies[i].ranking = len(all_movies) - i
