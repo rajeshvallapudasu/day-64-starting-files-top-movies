@@ -12,8 +12,8 @@ db=SQLAlchemy()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
 # app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
-# app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///top_movies.db"
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///top_movies.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///top_movies.db"
+# app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///top_movies.db")
 db.init_app(app)
 
 
