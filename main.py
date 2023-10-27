@@ -56,8 +56,8 @@ class AddMovie(FlaskForm):
 def home():
     all_movies = []
 
-    for i in range(len(all_movies)):
-        all_movies[i].ranking = len(all_movies) - i
+    # for i in range(len(all_movies)):
+    #     all_movies[i].ranking = len(all_movies) - i
     return render_template("index.html", movies=all_movies)
 
 
