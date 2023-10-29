@@ -1,19 +1,22 @@
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, abort,render_template, redirect, url_for, request,flash
 from flask_bootstrap import Bootstrap5
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField,PasswordField
 from wtforms.validators import DataRequired
+from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user
 import requests
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 import os
 
 
 db=SQLAlchemy()
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
-# app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
-# app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///top_movies.db"
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///top_movies.db")
+# app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
+app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///top_movies.db"
+# app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///top_movies.db")
 db.init_app(app)
 
 
@@ -24,6 +27,15 @@ headers = {
     "accept": "application/json",
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI2YmEwMjQzODllMTgyZjVhYjcyZWVkMTZjNTk1MDA5MiIsInN1YiI6IjY1MmI0MDVlMDI0ZWM4MDBhZWNiODBjZCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.XZO_GdaRWOMw0LP9uyv_JiHF80fehxyCFyGePt3Dj1c"
 }
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.get_or_404(User, user_id)
+
 
 
 
@@ -37,11 +49,25 @@ class Movie(db.Model):
     ranking=db.Column(db.Integer,nullable=False)
     review=db.Column(db.String,nullable=False)
     img_url=db.Column(db.String,nullable=False)
+class User(UserMixin, db.Model):
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(100))
+    name = db.Column(db.String(100))
 
 with app.app_context():
     db.create_all()
+def admin_only(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # If id is not 1 then return abort with 403 error
+        if current_user.id != 1:
+            return abort(403)
+        # Otherwise continue with the route function
+        return f(*args, **kwargs)
 
-
+    return decorated_function
 Bootstrap5(app)
 class RateMovie(FlaskForm):
     rating = StringField('rating', validators=[DataRequired()])
@@ -50,8 +76,44 @@ class RateMovie(FlaskForm):
 class AddMovie(FlaskForm):
     title = StringField('Movie Title', validators=[DataRequired()])
     submit = SubmitField('Add Movie')
+class LoginForm(FlaskForm):
+    email = StringField('email', validators=[DataRequired()])
+    password = PasswordField('Password',validators=[DataRequired()])
+    submit = SubmitField('Submit')
+class RegisterForm(FlaskForm):
+    email = StringField("Email", validators=[DataRequired()])
+    password = PasswordField("Password", validators=[DataRequired()])
+    name = StringField("Name", validators=[DataRequired()])
+    submit = SubmitField("Sign Me Up!")
+@app.route('/register', methods=["GET", "POST"])
+def register():
+    form = RegisterForm()
+    if form.validate_on_submit():
 
+        # Check if user email is already present in the database.
+        result = db.session.execute(db.select(User).where(User.email == form.email.data))
+        user = result.scalar()
+        if user:
+            # User already exists
+            flash("You've already signed up with that email, log in instead!")
+            return redirect(url_for('login'))
 
+        hash_and_salted_password = generate_password_hash(
+            form.password.data,
+            method='pbkdf2:sha256',
+            salt_length=8
+        )
+        new_user = User(
+            email=form.email.data,
+            name=form.name.data,
+            password=hash_and_salted_password,
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        # This line will authenticate the user with Flask-Login
+        login_user(new_user)
+        return redirect(url_for("home"))
+    return render_template("register.html", form=form, current_user=current_user)
 
 @app.route("/")
 def home():
@@ -59,10 +121,11 @@ def home():
 
     for i in range(len(all_movies)):
         all_movies[i].ranking = len(all_movies) - i
-    return render_template("index.html", movies=all_movies)
+    return render_template("index.html", movies=all_movies,current_user=current_user)
 
 
 @app.route("/edit", methods=["GET", "POST"])
+@admin_only
 def edit():
     form=RateMovie()
     movie_id = request.args.get('id')
@@ -77,6 +140,7 @@ def edit():
 
 
 @app.route("/delete")
+@admin_only
 def delete():
     movie_id = request.args.get('id')
 
@@ -88,7 +152,9 @@ def delete():
     db.session.commit()
     return redirect(url_for('home'))
 
+
 @app.route("/add",methods=["GET", "POST"])
+@admin_only
 def add():
     form=AddMovie()
     if form.validate_on_submit():
@@ -123,6 +189,31 @@ def find_movie():
         db.session.commit()
         return redirect(url_for("edit", id=new_movie.id))
 
+@app.route('/login', methods=["GET", "POST"])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        password = form.password.data
+        result = db.session.execute(db.select(User).where(User.email == form.email.data))
+        # Note, email in db is unique so will only have one result.
+        user = result.scalar()
+        # Email doesn't exist
+        if not user:
+            flash("That email does not exist, please try again.")
+            return redirect(url_for('login'))
+        # Password incorrect
+        elif not check_password_hash(user.password, password):
+            flash('Password incorrect, please try again.')
+            return redirect(url_for('login'))
+        else:
+            login_user(user)
+            return redirect(url_for('home'))
+
+    return render_template("login.html", form=form, current_user=current_user)
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True)
