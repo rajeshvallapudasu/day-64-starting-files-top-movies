@@ -28,13 +28,7 @@ headers = {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI2YmEwMjQzODllMTgyZjVhYjcyZWVkMTZjNTk1MDA5MiIsInN1YiI6IjY1MmI0MDVlMDI0ZWM4MDBhZWNiODBjZCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.XZO_GdaRWOMw0LP9uyv_JiHF80fehxyCFyGePt3Dj1c"
 }
 
-login_manager = LoginManager()
-login_manager.init_app(app)
 
-
-@login_manager.user_loader
-def load_user(user_id):
-    return db.get_or_404(User, user_id)
 
 
 
